@@ -89,13 +89,23 @@ func NewMassifFinder(options *Options, opts ...massifs.Option) (*MassifFinder, e
 		options = &Options{}
 	}
 
-	f := MassifFinder{
-		Opts: options,
-	}
 	for _, opt := range opts {
-		opt(f.Opts)
-		opt(&f.Opts.Options)
+		opt(options)
+		opt(&options.Options)
 	}
+
+	f := &MassifFinder{}
+	if err = f.Init(options); err != nil {
+		return nil, fmt.Errorf("failed to init massif finder: %w", err)
+	}
+	return f, nil
+}
+
+func (f *MassifFinder) Init(opts *Options) error {
+
+	var err error
+
+	f.Opts = opts
 
 	if f.Opts.IdentifyLog == nil {
 		f.Opts.IdentifyLog = identifyLog
@@ -107,13 +117,13 @@ func NewMassifFinder(options *Options, opts ...massifs.Option) (*MassifFinder, e
 	if f.Opts.CBORCodec == nil {
 		var codec commoncbor.CBORCodec
 		if codec, err = massifs.NewCBORCodec(); err != nil {
-			return nil, err
+			return err
 		}
 		f.Opts.CBORCodec = &codec
 	}
 
 	if f.Opts.Dir == "" && f.Opts.MassifFilename == "" {
-		return nil, fmt.Errorf("either Dir or MassifFilename must be set")
+		return fmt.Errorf("either Dir or MassifFilename must be set")
 	}
 
 	if f.Opts.SealDir == "" && f.Opts.SealFilename == "" {
@@ -128,15 +138,30 @@ func NewMassifFinder(options *Options, opts ...massifs.Option) (*MassifFinder, e
 		f.Opts.MassifExtension = DefaultMassifExt
 	}
 
-	f.Cache, err = filecache.NewCache(f.Opts.Options, opts...)
+	f.Cache, err = filecache.NewCache(f.Opts.Options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create massif cache: %w", err)
+		return fmt.Errorf("failed to create massif cache: %w", err)
 	}
-	return &f, nil
+
+	return nil
 }
 
 func (f *MassifFinder) Prepare(ctx context.Context) error {
 	return f.populateCache(ctx)
+}
+
+func (f *MassifFinder) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
+	if f.Cache == nil {
+		return fmt.Errorf("massif cache not initialized")
+	}
+	if logId == nil {
+		return fmt.Errorf("logId cannot be nil")
+	}
+	if err := f.Cache.SelectLog(logId); err != nil {
+		return fmt.Errorf("failed to select log %s: %w", logId, err)
+	}
+	f.Opts.PathProvider = pathProvider
+	return nil
 }
 
 func NewMassifContext(data []byte) (*massifs.MassifContext, error) {
@@ -249,6 +274,13 @@ func (f MassifFinder) GetCheckpoint(ctx context.Context, massifIndex uint32) (*m
 
 func (f MassifFinder) GetHeadCheckpoint(ctx context.Context) (*massifs.Checkpoint, error) {
 	return f.GetCheckpoint(ctx, f.Cache.Selected.HeadSealIndex)
+}
+
+func (f *MassifFinder) ReplaceVerifiedContext(ctx context.Context, vc *massifs.VerifiedContext) error {
+	if f.Cache.Selected == nil {
+		return storage.ErrLogNotSelected
+	}
+	return f.Cache.ReplaceVerified(vc)
 }
 
 func (f *MassifFinder) log(msg string, args ...any) {

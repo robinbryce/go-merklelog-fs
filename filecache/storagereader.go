@@ -110,6 +110,56 @@ func (c *Cache) Prime(ctx context.Context, storagePath string, ty storage.Object
 	return c.Read(ctx, storagePath, storage.ObjectMassifStart)
 }
 
+func (c *Cache) ReplaceVerified(vc *massifs.VerifiedContext) error {
+
+	if c.Selected == nil {
+		return storage.ErrLogNotSelected
+	}
+
+	paths, ok := c.Selected.MassifPaths[vc.Start.MassifIndex]
+	if !ok {
+		return fmt.Errorf("massif paths not found for massif index %d", vc.Start.MassifIndex)
+	}
+
+	// We are always provided the full massif data, not a delta. So the open
+	// mode is O_TRUNC (empty the file if it exists).  The caller is responsible
+	// for checking the local is consistent with the remote before replacing.
+
+	dataFile, err := OpenCreate(paths.Data)
+	if err != nil {
+		return fmt.Errorf("failed to open/create massif data file %s: %w", paths.Data, err)
+	}
+	// open both files before writing to avoid partial writes due to file path errors
+	checkPtFile, err := OpenCreate(paths.Checkpoint)
+	if err != nil {
+		dataFile.Close()
+		return fmt.Errorf("failed to open/create checkpoint file %s: %w", paths.Checkpoint, err)
+	}
+
+	// Write the data first, because we could use the checkpoint to verify a roll back
+	err = WriteAndClose(dataFile, vc.Data)
+	if err != nil {
+		// WriteAndClose will close the file even on error
+		return fmt.Errorf("failed to write massif data to %s: %w", paths.Data, err)
+	}
+	checkPtBytes, err := vc.Sign1Message.MarshalCBOR()
+	if err != nil {
+		return fmt.Errorf("failed to marshal checkpoint message: %w", err)
+	}
+	err = WriteAndClose(checkPtFile, checkPtBytes)
+	if err != nil {
+		return fmt.Errorf("failed to write checkpoint to %s: %w", paths.Checkpoint, err)
+	}
+
+	// Replace the verified context in the cache
+	c.Selected.MassifData[paths.Data] = vc.Data
+	c.Selected.Starts[paths.Data] = &vc.Start
+	c.Selected.Checkpoints[paths.Checkpoint].MMRState = vc.MMRState
+	c.Selected.Checkpoints[paths.Checkpoint].Sign1Message = vc.Sign1Message
+
+	return nil
+}
+
 func (c *Cache) Read(ctx context.Context, storagePath string, ty storage.ObjectType) error {
 
 	var ok bool
