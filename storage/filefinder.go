@@ -157,10 +157,12 @@ func (f *MassifFinder) SelectLog(logId storage.LogID, pathProvider storage.PathP
 	if logId == nil {
 		return fmt.Errorf("logId cannot be nil")
 	}
-	if err := f.Cache.SelectLog(logId); err != nil {
+	if pathProvider == nil {
+		pathProvider = f.Opts.PathProvider
+	}
+	if err := f.Cache.SelectLog(logId, pathProvider); err != nil {
 		return fmt.Errorf("failed to select log %s: %w", logId, err)
 	}
-	f.Opts.PathProvider = pathProvider
 	return nil
 }
 
@@ -322,11 +324,9 @@ func (f *MassifFinder) populateCache(ctx context.Context) error {
 		{paths: checkpointPaths, ty: storage.ObjectCheckpoint},
 	} {
 		for _, storagePath := range e.paths {
-			logID, err := f.Opts.IdentifyLog(ctx, storagePath)
-			if err != nil {
-				return fmt.Errorf("failed to identify log %s: %w", storagePath, err)
-			}
-			if err := f.Cache.SelectLog(logID); err != nil {
+
+			pathProvider := NewPathProviderFromPath(storagePath)
+			if err := f.Cache.SelectLog(pathProvider.CurrentLogID, pathProvider); err != nil {
 				return fmt.Errorf("failed to select log %s: %w", storagePath, err)
 			}
 

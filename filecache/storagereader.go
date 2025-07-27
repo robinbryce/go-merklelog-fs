@@ -16,6 +16,7 @@ type MassifStoragePaths struct {
 }
 
 type LogCache struct {
+	PathProvider     storage.PathProvider
 	MassifPaths      map[uint32]*MassifStoragePaths
 	Starts           map[string]*massifs.MassifStart
 	MassifData       map[string][]byte
@@ -44,19 +45,13 @@ func NewCache(options Options, opts ...massifs.Option) (*Cache, error) {
 	if err := cache.checkOptions(); err != nil {
 		return nil, err
 	}
+	cache.CacheLogs = make(map[string]*LogCache)
 	return cache, nil
 }
 
 // Interface methods
 
-func (c *Cache) IdentifyLog(ctx context.Context, storagePath string) (storage.LogID, error) {
-	if c.Options.IdentifyLog == nil {
-		return nil, fmt.Errorf("IdentifyLog function not set in options")
-	}
-	return c.Options.IdentifyLog(ctx, storagePath)
-}
-
-func (c *Cache) SelectLog(logId storage.LogID) error {
+func (c *Cache) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
 
 	if bytes.Equal(logId, c.SelectedLogID) && c.Selected != nil {
 		return nil // Already selected
@@ -74,6 +69,9 @@ func (c *Cache) SelectLog(logId storage.LogID) error {
 			FirstSealIndex:   ^uint32(0),
 		}
 		c.CacheLogs[string(logId)] = c.Selected
+	}
+	if c.Selected.PathProvider != nil {
+		c.Selected.PathProvider = pathProvider
 	}
 	return nil
 }

@@ -94,7 +94,7 @@ func (c *TestContext) NewNativeMassifFinder(opts massifs.StorageOptions) (*fssto
 		opts.CBORCodec = &codec
 	}
 	if opts.PathProvider == nil {
-		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
+		opts.PathProvider = datatrails.NewPathProvider(opts.LogID)
 	}
 	azopts := fsstorage.Options{}
 	azopts.Options.StorageOptions = opts
@@ -111,14 +111,14 @@ func (c *TestContext) DeleteBlobsByPrefix(blobPrefixPath string) {
 
 	entries, err := os.ReadDir(blobPrefixPath)
 	if err != nil {
-		c.T.Fatalf("reading directory %q: %w", blobPrefixPath, err)
+		c.T.Fatalf("reading directory %q: %v", blobPrefixPath, err)
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			subdirPath := filepath.Join(blobPrefixPath, entry.Name())
 			if err := os.RemoveAll(subdirPath); err != nil {
-				c.T.Fatalf("removing directory %q: %w", subdirPath, err)
+				c.T.Fatalf("removing directory %q: %v", subdirPath, err)
 			}
 		}
 	}

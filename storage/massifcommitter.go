@@ -91,6 +91,7 @@ func (c *MassifCommitter) GetAppendContext(
 
 func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifContext) error {
 	var err error
+	var storagePath string
 
 	// Check we have not over filled the massif.
 
@@ -120,8 +121,10 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	// modification time in combination with file size at time of read for a
 	// usefully robust heuristic.
 
-	storagePath := c.Opts.PathProvider.GetStoragePath(mc.Start.MassifIndex, storage.ObjectMassifData)
-
+	storagePath, err = c.Opts.PathProvider.GetStoragePath(mc.Start.MassifIndex, storage.ObjectMassifData)
+	if err != nil {
+		return fmt.Errorf("failed to get storage path for massif %d: %w", mc.Start.MassifIndex, err)
+	}
 	var massifFile io.WriteCloser
 
 	// Also CRITICAL: We must set the not-exists option if we are creating a new

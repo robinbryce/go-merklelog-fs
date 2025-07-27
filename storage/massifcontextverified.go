@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
@@ -35,10 +34,6 @@ func (f *MassifFinder) getContextVerified(ctx context.Context, massifIndex uint3
 
 func (f *MassifFinder) getContextVerifiedOptioned(ctx context.Context, massifIndex uint32, options *massifs.VerifyOptions) (*massifs.VerifiedContext, error) {
 	var err error
-
-	if options.CBORCodec == nil || options.COSEVerifier == nil {
-		return nil, fmt.Errorf("%w: missing cbor codec or verifier", storage.ErrOpConfigMissing)
-	}
 
 	// Get the massif context
 	mc, err := f.GetMassifContext(ctx, massifIndex)
