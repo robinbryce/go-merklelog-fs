@@ -3,14 +3,12 @@ package filecache
 import (
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 )
 
 type Options struct {
 	massifs.StorageOptions
 	// CBORCodec    *commoncbor.CBORCodec
 	// MassifHeight uint8 // e.g. 14
-	IdentifyLog storage.IdentifyLogFunc
 	Opener      Opener
 	Log         logger.Logger
 }

@@ -2,14 +2,15 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/robinbryce/go-merklelog-fs/filecache"
 	// "github.com/robinbryce/go-merklelog-fs/storage"
 )
@@ -24,34 +25,8 @@ var DefaultLogID = []byte{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 }
 
-func identifyLog(ctx context.Context, storagePath string) (storage.LogID, error) {
-	if storagePath == "" {
-		return storage.LogID(DefaultLogID), nil
-	}
-	logID, err := datatrails.IdentifyLogTenantID(ctx, storagePath)
-	if err != nil {
-		return nil, err
-	}
-	if logID != nil {
-		return logID, nil
-	}
-	return storage.LogID(DefaultLogID), nil
-}
-
 type Options struct {
 	filecache.Options
-
-	// MassifFilename is the name of the massif file, e.g. "massif.log"
-	// if this is set, Dir is ignored
-	MassifFilename string
-	// SealFilename is the name of the seal file, e.g. "massif.sth"
-	// if this is set, SealDir is ignored, and SealDir does not default to Dir
-	SealFilename string
-
-	// Dir is the directory where the massif files are stored
-	Dir string
-	// SealDir is the directory where the seal files are stored, if different from Dir
-	SealDir string
 
 	SealExtension   string // e.g. ".sth"
 	MassifExtension string // e.g. ".log"
@@ -59,28 +34,10 @@ type Options struct {
 
 type CheckpointOptions struct{}
 
-func WithMassifFilename(massifFilename string) filecache.Option {
-	return func(a any) {
-		if opts, ok := a.(*Options); ok {
-			opts.MassifFilename = massifFilename
-		}
-	}
-}
-
 type MassifFinder struct {
 	Opts  *Options
 	Cache *filecache.Cache
 }
-
-/*
-	cache, err := dircache.NewLogDirCache(
-		dircache.WithMassifLister(NewSuffixDirLister(f.cfg.MassifExtension)),
-		dircache.WithSealLister(NewSuffixDirLister(f.cfg.SealExtension)),
-		dircache.WithMassifHeight(f.cfg.MassifHeight),
-		dircache.WithCBORCodec(f.cfg.CBORCodec),
-		dircache.WithOpener(NewFileOpener()),
-		dircache.WithLogger(f.cfg.Log),
-	)*/
 
 func NewMassifFinder(options *Options, opts ...massifs.Option) (*MassifFinder, error) {
 	var err error
@@ -107,9 +64,6 @@ func (f *MassifFinder) Init(opts *Options) error {
 
 	f.Opts = opts
 
-	if f.Opts.IdentifyLog == nil {
-		f.Opts.IdentifyLog = identifyLog
-	}
 	if f.Opts.MassifHeight == 0 {
 		f.Opts.MassifHeight = DefaultMassifHeight
 	}
@@ -122,20 +76,19 @@ func (f *MassifFinder) Init(opts *Options) error {
 		f.Opts.CBORCodec = &codec
 	}
 
-	if f.Opts.Dir == "" && f.Opts.MassifFilename == "" {
-		return fmt.Errorf("either Dir or MassifFilename must be set")
-	}
-
-	if f.Opts.SealDir == "" && f.Opts.SealFilename == "" {
-		f.Opts.SealDir = f.Opts.Dir
-	}
-
 	if f.Opts.SealExtension == "" {
 		f.Opts.SealExtension = DefaultSealExt
 	}
 
+	if f.Opts.PrefixProvider == nil {
+		return fmt.Errorf("a prefix provider is required")
+	}
+
 	if f.Opts.MassifExtension == "" {
 		f.Opts.MassifExtension = DefaultMassifExt
+	}
+	if f.Opts.Opener == nil {
+		f.Opts.Opener = NewFileOpener()
 	}
 
 	f.Cache, err = filecache.NewCache(f.Opts.Options)
@@ -143,26 +96,6 @@ func (f *MassifFinder) Init(opts *Options) error {
 		return fmt.Errorf("failed to create massif cache: %w", err)
 	}
 
-	return nil
-}
-
-func (f *MassifFinder) Prepare(ctx context.Context) error {
-	return f.populateCache(ctx)
-}
-
-func (f *MassifFinder) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
-	if f.Cache == nil {
-		return fmt.Errorf("massif cache not initialized")
-	}
-	if logId == nil {
-		return fmt.Errorf("logId cannot be nil")
-	}
-	if pathProvider == nil {
-		pathProvider = f.Opts.PathProvider
-	}
-	if err := f.Cache.SelectLog(logId, pathProvider); err != nil {
-		return fmt.Errorf("failed to select log %s: %w", logId, err)
-	}
 	return nil
 }
 
@@ -193,41 +126,6 @@ func (f MassifFinder) HeadIndex(ctx context.Context, otype storage.ObjectType) (
 
 func (f MassifFinder) Native(massifIndex uint32, otype storage.ObjectType) (any, error) {
 	return nil, storage.ErrNativeNotImplemented
-	/*
-		if c.Selected == nil {
-			return nil, storage.ErrLogNotSelected
-		}
-
-		   switch otype {
-		   case storage.ObjectMassifStart:
-
-		   	if massifIndex < f.Cache.Selected.FirstMassifIndex || massifIndex > f.Cache.Selected.HeadMassifIndex {
-		   		return nil, storage.ErrDoesNotExist
-		   	}
-		   	// TODO: index -> storagepath
-		   	return nil, storage.ErrNativeNotImplemented
-
-		   case storage.ObjectMassifData:
-
-		   	if massifIndex < f.Cache.Selected.FirstMassifIndex || massifIndex > f.Cache.Selected.HeadMassifIndex {
-		   		return nil, storage.ErrDoesNotExist
-		   	}
-		   	// TODO: index -> storagepath
-		   	return nil, storage.ErrNativeNotImplemented
-
-		   case storage.ObjectCheckpoint:
-
-		   	if massifIndex < f.Cache.Selected.FirstSealIndex || massifIndex > f.Cache.Selected.HeadSealIndex {
-		   		return nil, storage.ErrDoesNotExist
-		   	}
-		   	// TODO: index -> storagepath
-		   	return nil, storage.ErrNativeNotImplemented
-
-		   default:
-
-		   		return nil, fmt.Errorf("unsupported object type %v", otype)
-		   	}
-	*/
 }
 
 func (f MassifFinder) GetMassifContext(ctx context.Context, massifIndex uint32) (*massifs.MassifContext, error) {
@@ -285,35 +183,45 @@ func (f *MassifFinder) ReplaceVerifiedContext(ctx context.Context, vc *massifs.V
 	return f.Cache.ReplaceVerified(vc)
 }
 
-func (f *MassifFinder) log(msg string, args ...any) {
-	if f.Opts.Log == nil {
-		return
+func (f *MassifFinder) SelectLog(ctx context.Context, logId storage.LogID) error {
+	if f.Cache == nil {
+		return fmt.Errorf("massif cache not initialized")
 	}
-	f.Opts.Log.Infof(msg, args...)
+	if logId == nil {
+		return fmt.Errorf("logId cannot be nil")
+	}
+	return f.PopulateCache(ctx, logId)
+
 }
 
-func (f *MassifFinder) populateCache(ctx context.Context) error {
+func (f *MassifFinder) PopulateCache(ctx context.Context, logID storage.LogID) error {
 	var err error
+
+	if err := f.Cache.SelectLog(logID); err != nil {
+		return fmt.Errorf("failed to select log %x: %w", logID, err)
+	}
+
+	// Note: the explicit provision of MassifFilename only serves to locate the directory
+	massifsDir, err := f.Opts.PrefixProvider.Prefix(logID, storage.ObjectMassifData)
+	if err != nil {
+		return fmt.Errorf("failed to get massif prefix for log %x: %w", logID, err)
+	}
+	checkPointsDir, err := f.Opts.PrefixProvider.Prefix(logID, storage.ObjectCheckpoint)
+	if err != nil {
+		return fmt.Errorf("failed to get checkpoint prefix for log %x: %w", logID, err)
+	}
 
 	var massifPaths []string
 	var checkpointPaths []string
 
-	massifPaths, err = NewSuffixDirLister(f.Opts.MassifExtension).ListFiles(f.Opts.Dir)
-	if err != nil {
-		return fmt.Errorf("failed to list massif files in %s: %w", f.Opts.Dir, err)
-	}
-	// if there is a specific massif filename, use that and also use it first
-	if len(f.Opts.MassifFilename) > 0 {
-		massifPaths = append([]string{f.Opts.MassifFilename}, massifPaths...)
+	massifPaths, err = NewSuffixDirLister(f.Opts.MassifExtension).ListFiles(massifsDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("failed to list massif files in %s: %w", massifsDir, err)
 	}
 
-	checkpointPaths, err = NewSuffixDirLister(f.Opts.SealExtension).ListFiles(f.Opts.SealDir)
-	if err != nil {
-		return fmt.Errorf("failed to list massif files in %s: %w", f.Opts.Dir, err)
-	}
-	// if there is a specific massif filename, use that and also use it first
-	if len(f.Opts.SealFilename) > 0 {
-		checkpointPaths = append([]string{f.Opts.SealFilename}, checkpointPaths...)
+	checkpointPaths, err = NewSuffixDirLister(f.Opts.SealExtension).ListFiles(checkPointsDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("failed to list checkpoint files in %s: %w", checkPointsDir, err)
 	}
 
 	for _, e := range []struct {
@@ -324,11 +232,6 @@ func (f *MassifFinder) populateCache(ctx context.Context) error {
 		{paths: checkpointPaths, ty: storage.ObjectCheckpoint},
 	} {
 		for _, storagePath := range e.paths {
-
-			pathProvider := NewPathProviderFromPath(storagePath)
-			if err := f.Cache.SelectLog(pathProvider.CurrentLogID, pathProvider); err != nil {
-				return fmt.Errorf("failed to select log %s: %w", storagePath, err)
-			}
 
 			err = f.Cache.Prime(ctx, storagePath, e.ty)
 			if err != nil {

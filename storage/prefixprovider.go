@@ -5,39 +5,34 @@ import (
 	"path/filepath"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
+	"github.com/google/uuid"
+)
+
+const (
+	LogIDPrefix                = "log"
+	LogIDParsePrefix           = LogIDPrefix + "/"
+	DatatrailsLogIDPrefix      = "tenant"
+	DatatrailsLogIDParsePrefix = DatatrailsLogIDPrefix + "/"
+	CheckpointsDirName         = "checkpoints"
+	MassifsDirName             = "massifs"
 )
 
 type PrefixProvider struct {
-	Options *Options
-}
-
-func forceTrailingSlash(path string) string {
-	if len(path) > 0 && path[len(path)-1] != '/' {
-		return path + "/"
-	}
-	return path
+	Dir string // The directory where the massif files are stored
 }
 
 func (d PrefixProvider) Prefix(logID storage.LogID, otype storage.ObjectType) (string, error) {
 	switch otype {
 	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
 
-		// If we have an explicit filename, the prefix is it's containing directory
-		if d.Options.MassifFilename != "" {
-			return forceTrailingSlash(filepath.Dir(d.Options.MassifFilename)), nil
-		}
-		return forceTrailingSlash(d.Options.Dir), nil
+		// Use the logid and stick to the 'tenant/UUID' organization established by datatrails.
+		return filepath.Join(d.Dir, LogIDPrefix, uuid.UUID(logID).String(), MassifsDirName) + "/", nil
 
 	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
 
-		if d.Options.SealFilename != "" {
-			return forceTrailingSlash(filepath.Dir(d.Options.SealFilename)), nil
-		}
-		if d.Options.SealDir != "" {
-			return forceTrailingSlash(d.Options.SealDir), nil
-		}
-		return forceTrailingSlash(d.Options.Dir), nil
+		// Otherwise the logid and stick to the 'tenant/UUID' organization established by datatrails.
+		return filepath.Join(d.Dir, LogIDPrefix, uuid.UUID(logID).String(), CheckpointsDirName) + "/", nil
 
 	default:
 		return "", fmt.Errorf("unknown object type %v", otype)
@@ -49,9 +44,15 @@ func (d PrefixProvider) Prefix(logID storage.LogID, otype storage.ObjectType) (s
 // */tenant/<tenant_uuid>/*
 func (d PrefixProvider) LogID(storagePath string) (storage.LogID, error) {
 
-	logID := datatrails.TenantID2LogID(storagePath)
+	// prioritize the neutral, but support both for now.
+	logID := storageschema.ParsePrefixedLogID(LogIDParsePrefix, storagePath)
 	if logID != nil {
 		return logID, nil
 	}
+	logID = storageschema.ParsePrefixedLogID(DatatrailsLogIDParsePrefix, storagePath)
+	if logID != nil {
+		return logID, nil
+	}
+
 	return nil, fmt.Errorf("could not identify log ID in path: %s", storagePath)
 }

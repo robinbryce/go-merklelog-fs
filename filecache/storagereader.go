@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 )
 
 type MassifStoragePaths struct {
@@ -16,7 +18,6 @@ type MassifStoragePaths struct {
 }
 
 type LogCache struct {
-	PathProvider     storage.PathProvider
 	MassifPaths      map[uint32]*MassifStoragePaths
 	Starts           map[string]*massifs.MassifStart
 	MassifData       map[string][]byte
@@ -28,30 +29,30 @@ type LogCache struct {
 }
 
 type Cache struct {
-	Options       Options
+	Opts          Options
 	SelectedLogID storage.LogID
-	CacheLogs     map[string]*LogCache
+	Logs     map[string]*LogCache
 	Selected      *LogCache
 }
 
 func NewCache(options Options, opts ...massifs.Option) (*Cache, error) {
 
 	cache := &Cache{
-		Options: options,
+		Opts: options,
 	}
 	for _, opt := range opts {
-		opt(cache.Options)
+		opt(cache.Opts)
 	}
 	if err := cache.checkOptions(); err != nil {
 		return nil, err
 	}
-	cache.CacheLogs = make(map[string]*LogCache)
+	cache.Logs = make(map[string]*LogCache)
 	return cache, nil
 }
 
 // Interface methods
 
-func (c *Cache) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
+func (c *Cache) SelectLog(logId storage.LogID) error {
 
 	if bytes.Equal(logId, c.SelectedLogID) && c.Selected != nil {
 		return nil // Already selected
@@ -59,20 +60,19 @@ func (c *Cache) SelectLog(logId storage.LogID, pathProvider storage.PathProvider
 
 	var ok bool
 	c.SelectedLogID = logId
-	c.Selected, ok = c.CacheLogs[string(logId)]
+	c.Selected, ok = c.Logs[string(logId)]
 	if !ok {
 		c.Selected = &LogCache{
+			MassifPaths:      make(map[uint32]*MassifStoragePaths),
 			Starts:           make(map[string]*massifs.MassifStart),
 			MassifData:       make(map[string][]byte),
 			Checkpoints:      make(map[string]*massifs.Checkpoint),
 			FirstMassifIndex: ^uint32(0),
 			FirstSealIndex:   ^uint32(0),
 		}
-		c.CacheLogs[string(logId)] = c.Selected
+		c.Logs[string(logId)] = c.Selected
 	}
-	if c.Selected.PathProvider != nil {
-		c.Selected.PathProvider = pathProvider
-	}
+
 	return nil
 }
 
@@ -110,13 +110,37 @@ func (c *Cache) Prime(ctx context.Context, storagePath string, ty storage.Object
 
 func (c *Cache) ReplaceVerified(vc *massifs.VerifiedContext) error {
 
+	var err error
+
 	if c.Selected == nil {
 		return storage.ErrLogNotSelected
 	}
 
 	paths, ok := c.Selected.MassifPaths[vc.Start.MassifIndex]
 	if !ok {
-		return fmt.Errorf("massif paths not found for massif index %d", vc.Start.MassifIndex)
+
+		paths = &MassifStoragePaths{}
+
+		prefix, err := c.Opts.PrefixProvider.Prefix(c.SelectedLogID, storage.ObjectMassifData)
+		if err != nil {
+			return fmt.Errorf("failed to get massif data prefix: %w", err)
+		}
+		if err = os.MkdirAll(prefix, 0755); err != nil {
+			return fmt.Errorf("failed to create massif data directory %s: %w", prefix, err)
+		}
+		paths.Data = storageschema.FmtMassifPath(prefix, vc.Start.MassifIndex)
+
+		prefix, err = c.Opts.PrefixProvider.Prefix(c.SelectedLogID, storage.ObjectCheckpoint)
+		if err != nil {
+			return fmt.Errorf("failed to get checkpoint prefix: %w", err)
+		}
+
+		if err = os.MkdirAll(prefix, 0755); err != nil {
+			return fmt.Errorf("failed to create massif checkpoint directory %s: %w", prefix, err)
+		}
+
+		paths.Checkpoint = storageschema.FmtCheckpointPath(prefix, vc.Start.MassifIndex)
+		// defer updating MassifPaths until we have successfully written the files
 	}
 
 	// We are always provided the full massif data, not a delta. So the open
@@ -150,8 +174,10 @@ func (c *Cache) ReplaceVerified(vc *massifs.VerifiedContext) error {
 	}
 
 	// Replace the verified context in the cache
+	c.Selected.MassifPaths[vc.Start.MassifIndex] = paths // if they didn't exist, they are created now
 	c.Selected.MassifData[paths.Data] = vc.Data
 	c.Selected.Starts[paths.Data] = &vc.Start
+	c.Selected.Checkpoints[paths.Checkpoint] = &massifs.Checkpoint{}
 	c.Selected.Checkpoints[paths.Checkpoint].MMRState = vc.MMRState
 	c.Selected.Checkpoints[paths.Checkpoint].Sign1Message = vc.Sign1Message
 
@@ -175,7 +201,8 @@ func (c *Cache) Read(ctx context.Context, storagePath string, ty storage.ObjectT
 		}
 		c.Selected.Starts[storagePath] = start
 		if paths, ok = c.Selected.MassifPaths[start.MassifIndex]; !ok {
-			c.Selected.MassifPaths[start.MassifIndex] = &MassifStoragePaths{}
+			paths = &MassifStoragePaths{}
+			c.Selected.MassifPaths[start.MassifIndex] = paths
 		}
 		// the start is read from the massif file so its path is the same as the massif data path
 		paths.Data = storagePath
@@ -199,7 +226,8 @@ func (c *Cache) Read(ctx context.Context, storagePath string, ty storage.ObjectT
 		c.Selected.Starts[storagePath] = start
 
 		if paths, ok = c.Selected.MassifPaths[start.MassifIndex]; !ok {
-			c.Selected.MassifPaths[start.MassifIndex] = &MassifStoragePaths{}
+			paths = &MassifStoragePaths{}
+			c.Selected.MassifPaths[start.MassifIndex] = paths
 		}
 		paths.Data = storagePath
 		// the start data may have been read independently of the start. so we don't tuck this away in the new case above
@@ -217,10 +245,11 @@ func (c *Cache) Read(ctx context.Context, storagePath string, ty storage.ObjectT
 			return fmt.Errorf("failed to read checkpoint: %w", err)
 		}
 		c.Selected.Checkpoints[storagePath] = checkpoint
-		massifIndex := uint32(massifs.MassifIndexFromMMRIndex(c.Options.StorageOptions.MassifHeight, checkpoint.MMRState.MMRSize-1))
+		massifIndex := uint32(massifs.MassifIndexFromMMRIndex(c.Opts.StorageOptions.MassifHeight, checkpoint.MMRState.MMRSize-1))
 
 		if paths, ok = c.Selected.MassifPaths[massifIndex]; !ok {
-			c.Selected.MassifPaths[massifIndex] = &MassifStoragePaths{}
+			paths = &MassifStoragePaths{}
+			c.Selected.MassifPaths[massifIndex] = paths
 		}
 		paths.Checkpoint = storagePath
 		if massifIndex < c.Selected.FirstMassifIndex {
@@ -320,29 +349,26 @@ func (c *Cache) getData(massifIndex uint32) ([]byte, *massifs.MassifStart, error
 	return data, start, nil
 }
 
-func (c *Cache) getStart(massifIndex uint32) (MassifStoragePaths, *massifs.MassifStart, error) {
+func (c *Cache) getStart(massifIndex uint32) (*MassifStoragePaths, *massifs.MassifStart, error) {
 	if c.Selected == nil {
-		return MassifStoragePaths{}, nil, storage.ErrLogNotSelected
+		return nil, nil, storage.ErrLogNotSelected
 	}
 
 	if paths, ok := c.Selected.MassifPaths[massifIndex]; ok {
 		if paths.Data == "" {
-			return MassifStoragePaths{}, nil, fmt.Errorf("%w: massif data path for index %d", storage.ErrNotAvailable, massifIndex)
+			return nil, nil, fmt.Errorf("%w: massif data path for index %d", storage.ErrNotAvailable, massifIndex)
 		}
 		if start, ok := c.Selected.Starts[paths.Data]; ok {
-			return MassifStoragePaths{}, start, nil
+			return paths, start, nil
 		}
 	}
-	return MassifStoragePaths{}, nil, fmt.Errorf(
+	return nil, nil, fmt.Errorf(
 		"%w: massif start not found for index %d", storage.ErrNotAvailable, massifIndex)
 }
 
 func (c *Cache) readStart(storagePath string) (*massifs.MassifStart, error) {
-	if c.Options.Opener == nil {
-		return nil, fmt.Errorf("Opener not set in options")
-	}
 
-	file, err := c.Options.Opener.Open(storagePath)
+	file, err := c.Opts.Opener.Open(storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to open file %s (%v)", storage.ErrDoesNotExist, storagePath, err)
 	}
@@ -364,11 +390,11 @@ func (c *Cache) readStart(storagePath string) (*massifs.MassifStart, error) {
 }
 
 func (c *Cache) readData(storagePath string) ([]byte, *massifs.MassifStart, error) {
-	if c.Options.Opener == nil {
+	if c.Opts.Opener == nil {
 		return nil, nil, fmt.Errorf("Opener not set in options")
 	}
 
-	file, err := c.Options.Opener.Open(storagePath)
+	file, err := c.Opts.Opener.Open(storagePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: failed to open file %s (%v)", storage.ErrDoesNotExist, storagePath, err)
 	}
@@ -388,11 +414,11 @@ func (c *Cache) readData(storagePath string) ([]byte, *massifs.MassifStart, erro
 }
 
 func (c *Cache) readCheckpoint(storagePath string) (*massifs.Checkpoint, error) {
-	if c.Options.Opener == nil {
+	if c.Opts.Opener == nil {
 		return nil, fmt.Errorf("Opener not set in options")
 	}
 
-	file, err := c.Options.Opener.Open(storagePath)
+	file, err := c.Opts.Opener.Open(storagePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to open file %s (%v)", storage.ErrDoesNotExist, storagePath, err)
 	}
@@ -403,7 +429,7 @@ func (c *Cache) readCheckpoint(storagePath string) (*massifs.Checkpoint, error) 
 		return nil, fmt.Errorf("failed to read checkpoint data from %s: %w", storagePath, err)
 	}
 
-	cachedMessage, unverifiedState, err := massifs.DecodeSignedRoot(*c.Options.StorageOptions.CBORCodec, data)
+	cachedMessage, unverifiedState, err := massifs.DecodeSignedRoot(*c.Opts.StorageOptions.CBORCodec, data)
 	if err != nil {
 		return nil, err
 	}
@@ -415,11 +441,16 @@ func (c *Cache) readCheckpoint(storagePath string) (*massifs.Checkpoint, error) 
 }
 
 func (c *Cache) checkOptions() error {
-	if c.Options.StorageOptions.CBORCodec == nil {
+	if c.Opts.StorageOptions.CBORCodec == nil {
 		return fmt.Errorf("missing CBORCodec in options")
 	}
-	if c.Options.StorageOptions.MassifHeight == 0 {
+	if c.Opts.StorageOptions.MassifHeight == 0 {
 		return fmt.Errorf("missing MassifHeight in options")
 	}
+
+	if c.Opts.Opener == nil {
+		return fmt.Errorf("Opener not set in options")
+	}
+
 	return nil
 }
