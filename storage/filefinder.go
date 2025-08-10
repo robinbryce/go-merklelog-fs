@@ -160,6 +160,20 @@ func (f MassifFinder) GetMassif(ctx context.Context, massifIndex uint32, opts ..
 	return data, nil
 }
 
+func (f MassifFinder) Put(ctx context.Context, massifIndex uint32, data []byte, otype storage.ObjectType) error {
+	if f.Cache.Selected == nil {
+		return storage.ErrLogNotSelected
+	}
+	if otype != storage.ObjectMassifData {
+		return fmt.Errorf("unsupported object type %v for Put", otype)
+	}
+
+	if err := f.Cache.Put(ctx, massifIndex, data, otype); err != nil {
+		return fmt.Errorf("failed to put massif data: %w", err)
+	}
+	return nil
+}
+
 func (f MassifFinder) GetHeadMassif(ctx context.Context, opts ...massifs.Option) ([]byte, error) {
 	return f.GetMassif(ctx, f.Cache.Selected.HeadMassifIndex, opts...)
 }

@@ -11,7 +11,7 @@ The following modalities are supported:
 
 
   type LogId []bytes
- 
+
   storageLogId(storagePath string) -> LogId
   logId(storagePath string) -> LogId
 */

@@ -9,8 +9,8 @@ type Options struct {
 	massifs.StorageOptions
 	// CBORCodec    *commoncbor.CBORCodec
 	// MassifHeight uint8 // e.g. 14
-	Opener      Opener
-	Log         logger.Logger
+	Opener Opener
+	Log    logger.Logger
 }
 
 // Options for configuring the LogDirCache. Implementations type assert to Options

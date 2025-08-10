@@ -5,6 +5,7 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
+
 type prefixProvider interface {
 	Prefix(logID storage.LogID, otype storage.ObjectType) (string, error)
 	LogID(storagePath string) (storage.LogID, error)
