@@ -1,5 +1,4 @@
-package filecache
-
+package storage
 import "io"
 
 type Opener interface {

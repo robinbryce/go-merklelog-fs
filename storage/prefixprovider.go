@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/google/uuid"
 )
 
@@ -45,11 +44,11 @@ func (d PrefixProvider) Prefix(logID storage.LogID, otype storage.ObjectType) (s
 func (d PrefixProvider) LogID(storagePath string) (storage.LogID, error) {
 
 	// prioritize the neutral, but support both for now.
-	logID := storageschema.ParsePrefixedLogID(LogIDParsePrefix, storagePath)
+	logID := storage.ParsePrefixedLogID(LogIDParsePrefix, storagePath)
 	if logID != nil {
 		return logID, nil
 	}
-	logID = storageschema.ParsePrefixedLogID(DatatrailsLogIDParsePrefix, storagePath)
+	logID = storage.ParsePrefixedLogID(DatatrailsLogIDParsePrefix, storagePath)
 	if logID != nil {
 		return logID, nil
 	}

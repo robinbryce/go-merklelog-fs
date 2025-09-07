@@ -3,14 +3,18 @@ package storage
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/robinbryce/go-merklelog-fs/filecache"
 )
+
+type DirLister interface {
+	// ListFiles returns list of absolute paths
+	// to files (not subdirectories) in a directory
+	ListFiles(string) ([]string, error)
+}
 
 // OsDirLister provides utilities to remove the os dependencies from the MassifReader
 type OsDirLister struct{}
 
-func NewDirLister() filecache.DirLister {
+func NewDirLister() DirLister {
 	return &OsDirLister{}
 }
 
