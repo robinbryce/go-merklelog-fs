@@ -7,22 +7,19 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	fsstorage "github.com/robinbryce/go-merklelog-fs/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
-	"github.com/stretchr/testify/require"
 )
 
 type TestContext struct {
-	mmrtesting.TestContext[*TestContext, *TestContext]
+	mmrtesting.TestContext[*TestContext]
 	Cfg *TestOptions
 	Log logger.Logger
 }
 
 type TestOptions struct {
 	mmrtesting.TestOptions
-	// Container  string // can be "" defaults to TestLablePrefix
+	// Container  string // can be "" defaults to TestLabelPrefix
 	DebugLevel string // defaults to NOOP
 	FinderOpts fsstorage.Options
 }
@@ -64,7 +61,6 @@ func (c *TestContext) init(t *testing.T, cfg *TestOptions) {
 	cfg.EnsureDefaults(t)
 
 	c.Emulator = c
-	c.Factory = c
 
 	logger.New(cfg.DebugLevel)
 
@@ -78,13 +74,9 @@ func (c *TestContext) defaultStoreOpts(opts massifs.StorageOptions) fsstorage.Op
 	fsopts := fsstorage.Options{
 		StorageOptions: opts,
 	}
-
-	// Create PrefixProvider for filesystem storage
-	// Use a default directory path for testing
-	prefixProvider := &fsstorage.PrefixProvider{
-		Dir: "/tmp/forestrie-test", // Use temporary directory for tests
+	if fsopts.RootDir == "" {
+		fsopts.RootDir = c.Cfg.RootDir
 	}
-	fsopts.PrefixProvider = prefixProvider
 
 	// Apply defaults if needed
 	if fsopts.LogID == nil {
@@ -96,12 +88,10 @@ func (c *TestContext) defaultStoreOpts(opts massifs.StorageOptions) fsstorage.Op
 	if fsopts.CommitmentEpoch == 0 {
 		fsopts.CommitmentEpoch = c.Cfg.TestOptions.CommitmentEpoch
 	}
-	if fsopts.PathProvider == nil {
-		fsopts.PathProvider = datatrails.NewPathProvider(opts.LogID)
-	}
 	return fsopts
 }
 
+/*
 func (c *TestContext) NewMassifGetter(opts massifs.StorageOptions) (massifs.MassifContextGetter, error) {
 	fsopts := c.defaultStoreOpts(opts)
 
@@ -150,19 +140,7 @@ func (c *TestContext) NewCommitterStore(opts massifs.StorageOptions) (massifs.Co
 	provider, err := fsstorage.NewMassifStore(c.T.Context(), fsopts)
 	require.NoError(c.T, err, "failed to initialize caching store")
 	return provider, nil
-}
-
-func (c *TestContext) PadWithNumberedLeaves(data []byte, first, n int) []byte {
-	return c.G.PadWithNumberedLeaves(data, first, n)
-}
-
-func (c *TestContext) EncodeLeafForAddition(a any) mmrtesting.AddLeafArgs {
-	return c.G.EncodeLeafForAddition(a)
-}
-
-func (c *TestContext) GenerateLeafContent(logID storage.LogID) any {
-	return c.G.GenerateLeafContent(logID)
-}
+}*/
 
 func (c *TestContext) DeleteByStoragePrefix(blobPrefixPath string) {
 	// Basic safety checks
@@ -170,19 +148,22 @@ func (c *TestContext) DeleteByStoragePrefix(blobPrefixPath string) {
 		c.T.Fatalf("refusing to delete directories under empty path or '/'")
 	}
 
-	entries, err := os.ReadDir(blobPrefixPath)
+	storagePath := filepath.Join(c.Cfg.RootDir, blobPrefixPath)
+
+	entries, err := os.ReadDir(storagePath)
 	if err != nil {
-		c.T.Fatalf("reading directory %q: %v", blobPrefixPath, err)
+		if !os.IsNotExist(err) {
+			c.T.Fatalf("reading directory %q: %v", storagePath, err)
+		}
+		return
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			subdirPath := filepath.Join(blobPrefixPath, entry.Name())
+			subdirPath := filepath.Join(storagePath, entry.Name())
 			if err := os.RemoveAll(subdirPath); err != nil {
 				c.T.Fatalf("removing directory %q: %v", subdirPath, err)
 			}
 		}
 	}
 }
-
-func (c *TestContext) GetLog() logger.Logger { return c.Log }

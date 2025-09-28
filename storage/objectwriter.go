@@ -32,7 +32,12 @@ func (s *CachingStore) Put(
 	var storagePath string
 	var err error
 
-	storagePath, err = s.Opts.PathProvider.GetStoragePath(massifIndex, ty)
+	prefix, err := s.PrefixPath(ty)
+	if err != nil {
+		return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
+	}
+
+	storagePath, err = storage.ObjectPath(prefix, s.SelectedLogID, massifIndex, ty)
 	if err != nil {
 		return fmt.Errorf("failed to get storage path for massif index %d, type %v: %w", massifIndex, ty, err)
 	}
@@ -55,7 +60,6 @@ func (s *CachingStore) Put(
 	if _, err := f.Write(data); err != nil {
 		return fmt.Errorf("failed to write data to storage path %s: %w", storagePath, err)
 	}
-
 
 	paths, ok := s.Selected.MassifPaths[massifIndex]
 	if !ok {

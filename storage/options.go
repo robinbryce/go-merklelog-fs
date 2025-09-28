@@ -20,10 +20,8 @@ var DefaultLogID = []byte{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 }
 
-type Options struct {
-	// filecache.Options
-	massifs.StorageOptions
-
+type FSOptions struct {
+	RootDir         string
 	SealExtension   string // e.g. ".sth"
 	MassifExtension string // e.g. ".log"
 	ReadOpener      Opener
@@ -32,8 +30,21 @@ type Options struct {
 	DirCreateMode   os.FileMode
 }
 
+type Options struct {
+	massifs.StorageOptions
+	FSOptions
+}
+
 func (opts *Options) Clone() Options {
 	return *opts
+}
+
+func WithRootDir(dir string) massifs.Option {
+	return func(a any) {
+		if o, ok := a.(*Options); ok {
+			o.RootDir = dir
+		}
+	}
 }
 
 func (opts *Options) FillDefaults() error {

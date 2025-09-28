@@ -36,7 +36,7 @@ func (s *CachingStore) Init(ctx context.Context, parent *Options, vopts ...massi
 		return err
 	}
 
-	if s.Opts.LogID != nil && s.Opts.PathProvider != nil {
+	if s.Opts.LogID != nil {
 		if err := s.SelectLog(ctx, s.Opts.LogID); err != nil {
 			return fmt.Errorf("failed to select log %s: %w", s.Opts.LogID, err)
 		}

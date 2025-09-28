@@ -74,7 +74,12 @@ func (s *CachingStore) MassifReadN(ctx context.Context, massifIndex uint32, n in
 		return nil, storage.ErrDoesNotExist
 	}
 
-	data, err := s.readn(storagePath, n)
+	var data []byte
+	if n < 0 {
+		data, err = s.read(storagePath)
+	} else {
+		data, err = s.readn(storagePath, n)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +106,7 @@ func (s *CachingStore) CheckpointRead(ctx context.Context, massifIndex uint32) (
 }
 
 func (s *CachingStore) readn(filePath string, n int) ([]byte, error) {
+
 	file, err := s.Opts.ReadOpener.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to open file %s (%v)", storage.ErrDoesNotExist, filePath, err)

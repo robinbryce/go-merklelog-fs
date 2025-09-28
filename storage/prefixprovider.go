@@ -17,31 +17,27 @@ const (
 	MassifsDirName             = "massifs"
 )
 
-type PrefixProvider struct {
-	Dir string // The directory where the massif files are stored
-}
-
-func (d PrefixProvider) Prefix(logID storage.LogID, otype storage.ObjectType) (string, error) {
+func (s CachingStore) PrefixPath(otype storage.ObjectType) (string, error) {
 	switch otype {
 	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
 
 		// Use the logid and stick to the 'tenant/UUID' organization established by datatrails.
-		return filepath.Join(d.Dir, LogIDPrefix, uuid.UUID(logID).String(), MassifsDirName) + "/", nil
+		return filepath.Join(s.Opts.RootDir, LogIDPrefix, uuid.UUID(s.SelectedLogID).String(), MassifsDirName) + "/", nil
 
 	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
 
 		// Otherwise the logid and stick to the 'tenant/UUID' organization established by datatrails.
-		return filepath.Join(d.Dir, LogIDPrefix, uuid.UUID(logID).String(), CheckpointsDirName) + "/", nil
+		return filepath.Join(s.Opts.RootDir, LogIDPrefix, uuid.UUID(s.SelectedLogID).String(), CheckpointsDirName) + "/", nil
 
 	default:
 		return "", fmt.Errorf("unknown object type %v", otype)
 	}
 }
 
-// LogID from the storage path according to the datatrails massif storage schema.
+// StoragePath2LogID from the storage path according to the datatrails massif storage schema.
 // The storage path is expected to be in the format:
 // */tenant/<tenant_uuid>/*
-func (d PrefixProvider) LogID(storagePath string) (storage.LogID, error) {
+func StoragePath2LogID(storagePath string) (storage.LogID, error) {
 
 	// prioritize the neutral, but support both for now.
 	logID := storage.ParsePrefixedLogID(LogIDParsePrefix, storagePath)

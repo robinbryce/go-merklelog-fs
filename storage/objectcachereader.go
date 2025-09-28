@@ -43,11 +43,11 @@ func (s *CachingStore) PopulateCache(ctx context.Context) error {
 	}
 
 	// Note: the explicit provision of MassifFilename only serves to locate the directory
-	massifsDir, err := s.Opts.PrefixProvider.Prefix(s.SelectedLogID, storage.ObjectMassifData)
+	massifsDir, err := s.PrefixPath(storage.ObjectMassifData)
 	if err != nil {
 		return fmt.Errorf("failed to get massif prefix for log %x: %w", s.SelectedLogID, err)
 	}
-	checkPointsDir, err := s.Opts.PrefixProvider.Prefix(s.SelectedLogID, storage.ObjectCheckpoint)
+	checkPointsDir, err := s.PrefixPath(storage.ObjectCheckpoint)
 	if err != nil {
 		return fmt.Errorf("failed to get checkpoint prefix for log %x: %w", s.SelectedLogID, err)
 	}

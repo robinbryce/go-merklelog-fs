@@ -72,7 +72,7 @@ func (wo *defaultWriteOpener) OpenCreate(path string) (io.WriteCloser, error) {
 
 // OpenWrite opens the file at the given path for writing, truncating it if it exists.
 func (wo *defaultWriteOpener) OpenWrite(path string) (io.WriteCloser, error) {
-	return os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, wo.CreatePerms)
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, wo.CreatePerms)
 }
 
 /*
