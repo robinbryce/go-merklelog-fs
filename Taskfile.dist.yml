@@ -35,6 +35,7 @@ tasks:
         	./go-datatrails-serialization/eventsv1
         	./go-datatrails-simplehash
         	./go-merklelog-azure
+        	./go-merklelog-fs
         	./go-merklelog-provider-testing
         )
         EOF
