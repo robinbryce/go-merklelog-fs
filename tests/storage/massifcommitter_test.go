@@ -3,7 +3,6 @@ package storage
 import (
 	"testing"
 
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	fsstorage "github.com/robinbryce/go-merklelog-fs/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
@@ -11,17 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func NewLogBuilderFactory(tc *TestContext, opts massifs.StorageOptions) mmrtesting.LogBuilder {
-	fsopts := tc.defaultStoreOpts(opts)
+func NewLogBuilderFactory(tc *TestContext) mmrtesting.LogBuilder {
+	fsopts := fsstorage.Options{}
+	if fsopts.RootDir == "" {
+		fsopts.RootDir = tc.Cfg.RootDir
+	}
 
-	store, err := fsstorage.NewMassifStore(tc.T.Context(), fsopts)
-	require.NoError(tc.T, err)
-	committer, err := fsstorage.NewMassifCommitterStore(tc.T.Context(), store, fsopts)
+	store, err := fsstorage.NewStore(tc.T.Context(), fsopts)
 	require.NoError(tc.T, err)
 
 	builder := mmrtesting.LogBuilder{
 		LeafGenerator: mmrtesting.LeafGenerator{
-			LogID: opts.LogID,
 			Generator: func(logID storage.LogID, base, i uint64) any {
 				return tc.G.GenerateLeafContent(logID, base, i)
 			},
@@ -29,56 +28,54 @@ func NewLogBuilderFactory(tc *TestContext, opts massifs.StorageOptions) mmrtesti
 				return tc.G.EncodeLeafForAddition(a)
 			},
 		},
-		DeleteLog:       tc.DeleteLog,
-		MassifCommitter: committer,
-		MassifSealer:    store,
-		ObjectStore:     store,
+		DeleteLog:          tc.DeleteLog,
+		SelectLog:          store.SelectLog,
+		ObjectReader:       store,
+		ObjectWriter:       store,
+		ObjectReaderWriter: store,
 	}
 	return builder
 
 }
 
-func NewStorageTestContext(tc *TestContext) *providers.StorageMassifCommitterContext {
-	sc := &providers.StorageMassifCommitterContext{
-		BuilderFactory: func(opts massifs.StorageOptions) mmrtesting.LogBuilder {
-			return NewLogBuilderFactory(tc, opts)
-		},
+func NewBuilderFactory(tc *TestContext) providers.BuilderFactory {
+	return func() mmrtesting.LogBuilder {
+		return NewLogBuilderFactory(tc)
 	}
-	return sc
 }
 
 func TestMassifCommitter_firstMassif(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_firstMassif"))
-	sc := NewStorageTestContext(tc)
-	providers.StorageMassifCommitterFirstMassifTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterFirstMassifTest(tc, factory)
 }
 
 func TestMassifCommitter_addFirstTwoLeaves(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_addFirstTwoLeaves"))
-	sc := NewStorageTestContext(tc)
-	providers.StorageMassifCommitterAddFirstTwoLeavesTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterAddFirstTwoLeavesTest(tc, factory)
 }
 
 func TestMassifCommitter_extendAndCommitFirst(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_extendAndCommitFirst"))
-	sc := NewStorageTestContext(tc)
-	providers.StorageMassifCommitterExtendAndCommitFirstTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterExtendAndCommitFirstTest(tc, factory)
 }
 
 func TestMassifCommitter_completeFirst(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_completeFirst"))
-	sc := NewStorageTestContext(tc)
-	providers.StorageMassifCommitterCompleteFirstTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterCompleteFirstTest(tc, factory)
 }
 
 func TestMassifCommitter_overfillSafe(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_overfillSafe"))
-	sc := NewStorageTestContext(tc)
-	providers.StorageMassifCommitterOverfillSafeTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterOverfillSafeTest(tc, factory)
 }
 
 func TestMassifCommitter_threeMassifs(t *testing.T) {
 	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestUnifiedMassifCommitter_threeMassifs"))
-	sc := NewStorageTestContext(tc)
+	sc := NewBuilderFactory(tc)
 	providers.StorageMassifCommitterThreeMassifsTest(tc, sc)
 }
