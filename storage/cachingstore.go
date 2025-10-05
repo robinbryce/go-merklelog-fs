@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
+	commoncbor "github.com/datatrails/go-datatrails-merklelog/massifs/cbor"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 )

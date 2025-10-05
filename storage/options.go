@@ -7,7 +7,7 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 
 	// "github.com/robinbryce/go-merklelog-fs/storage"
-	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
+	commoncbor "github.com/datatrails/go-datatrails-merklelog/massifs/cbor"
 )
 
 const (
