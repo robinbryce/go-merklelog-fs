@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	commoncbor "github.com/datatrails/go-datatrails-merklelog/massifs/cbor"
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs"
+	commoncbor "github.com/forestrie/go-merklelog/massifs/cbor"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 )
 
 type CachingStore struct {

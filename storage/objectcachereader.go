@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 )
 
 // PopulateCache loads massif and checkpoint data for the currently selected log into the cache.

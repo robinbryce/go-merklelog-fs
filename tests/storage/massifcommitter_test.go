@@ -3,7 +3,7 @@ package storage
 import (
 	"testing"
 
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	fsstorage "github.com/robinbryce/go-merklelog-fs/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
 	"github.com/robinbryce/go-merklelog-provider-testing/providers"
