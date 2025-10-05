@@ -70,9 +70,6 @@ func (s *CachingStore) Put(
 	case storage.ObjectMassifData, storage.ObjectMassifStart:
 		s.Selected.MassifData[storagePath] = data
 
-		// if this is a replace, invalidate and defer re-population of the start
-		s.Selected.Starts[storagePath] = nil
-
 		if massifIndex > s.Selected.HeadMassifIndex {
 			s.Selected.HeadMassifIndex = massifIndex
 		}
@@ -84,8 +81,6 @@ func (s *CachingStore) Put(
 	case storage.ObjectCheckpoint:
 
 		s.Selected.CheckpointData[storagePath] = data
-		// if this is a replace, invalidate and defer re-population
-		s.Selected.Checkpoints[storagePath] = nil
 		if massifIndex > s.Selected.HeadSealIndex {
 			s.Selected.HeadSealIndex = massifIndex
 		}

@@ -22,7 +22,6 @@ import (
 // The method returns an error if the log is not selected, if directory listing fails for reasons
 // other than non-existence, or if reading any massif or checkpoint file fails.
 func (s *CachingStore) PopulateCache(ctx context.Context) error {
-	var err error
 
 	if s.SelectedLogID == nil {
 		return storage.ErrLogNotSelected
@@ -32,37 +31,46 @@ func (s *CachingStore) PopulateCache(ctx context.Context) error {
 	if !ok {
 		s.Selected = &LogCache{
 			MassifPaths:      make(map[uint32]*MassifStoragePaths),
-			Starts:           make(map[string]*massifs.MassifStart),
 			MassifData:       make(map[string][]byte),
 			CheckpointData:   make(map[string][]byte),
-			Checkpoints:      make(map[string]*massifs.Checkpoint),
 			FirstMassifIndex: ^uint32(0),
 			FirstSealIndex:   ^uint32(0),
 		}
 		s.Logs[string(s.SelectedLogID)] = s.Selected
 	}
 
-	// Note: the explicit provision of MassifFilename only serves to locate the directory
-	massifsDir, err := s.PrefixPath(storage.ObjectMassifData)
-	if err != nil {
-		return fmt.Errorf("failed to get massif prefix for log %x: %w", s.SelectedLogID, err)
-	}
-	checkPointsDir, err := s.PrefixPath(storage.ObjectCheckpoint)
-	if err != nil {
-		return fmt.Errorf("failed to get checkpoint prefix for log %x: %w", s.SelectedLogID, err)
-	}
-
 	var massifPaths []string
 	var checkpointPaths []string
 
-	massifPaths, err = NewSuffixDirLister(s.Opts.MassifExtension).ListFiles(massifsDir)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("failed to list massif files in %s: %w", massifsDir, err)
+	if s.Opts.RootDir != "" {
+		// Note: use "." for explicit activation of cwd
+
+		// Note: the explicit provision of MassifFilename only serves to locate the directory
+		massifsDir, err := s.PrefixPath(storage.ObjectMassifData)
+		if err != nil {
+			return fmt.Errorf("failed to get massif prefix for log %x: %w", s.SelectedLogID, err)
+		}
+		checkPointsDir, err := s.PrefixPath(storage.ObjectCheckpoint)
+		if err != nil {
+			return fmt.Errorf("failed to get checkpoint prefix for log %x: %w", s.SelectedLogID, err)
+		}
+
+		massifPaths, err = NewSuffixDirLister(s.Opts.MassifExtension).ListFiles(massifsDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("failed to list massif files in %s: %w", massifsDir, err)
+		}
+		checkpointPaths, err = NewSuffixDirLister(s.Opts.SealExtension).ListFiles(checkPointsDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("failed to list checkpoint files in %s: %w", checkPointsDir, err)
+		}
 	}
 
-	checkpointPaths, err = NewSuffixDirLister(s.Opts.SealExtension).ListFiles(checkPointsDir)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("failed to list checkpoint files in %s: %w", checkPointsDir, err)
+	if s.Opts.MassifFile != "" {
+		massifPaths = append(massifPaths, s.Opts.MassifFile)
+	}
+
+	if s.Opts.CheckpointFile != "" {
+		checkpointPaths = append(checkpointPaths, s.Opts.CheckpointFile)
 	}
 
 	for _, storagePath := range massifPaths {
@@ -75,7 +83,6 @@ func (s *CachingStore) PopulateCache(ctx context.Context) error {
 			Data: storagePath,
 		}
 
-		s.Selected.Starts[storagePath] = start
 		s.Selected.MassifData[storagePath] = data
 
 		if start.MassifIndex < s.Selected.FirstMassifIndex {
@@ -94,7 +101,6 @@ func (s *CachingStore) PopulateCache(ctx context.Context) error {
 		}
 		massifIndex := uint32(massifs.MassifIndexFromMMRIndex(s.Opts.StorageOptions.MassifHeight, checkpt.MMRState.MMRSize-1))
 
-		s.Selected.Checkpoints[storagePath] = checkpt
 		s.Selected.CheckpointData[storagePath] = data
 
 		// if we also have the massif path, keep the massif and checkpoint paths together
@@ -123,7 +129,6 @@ func (s *CachingStore) PopulateCache(ctx context.Context) error {
 // and returns the MassifStart struct along with the raw header bytes.
 // Returns an error if reading or decoding fails.
 func (s *CachingStore) readStart(storagePath string) (*massifs.MassifStart, []byte, error) {
-
 	data, err := s.readn(storagePath, massifs.StartHeaderSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read massif start from %s: %w", storagePath, err)
@@ -140,7 +145,6 @@ func (s *CachingStore) readStart(storagePath string) (*massifs.MassifStart, []by
 // It reads the entire checkpoint file, decodes the signed root, and returns the resulting Checkpoint struct.
 // readCheckpoint processes the full checkpoint file to extract both the MMR state and the signed message.
 func (s *CachingStore) readCheckpoint(storagePath string) (*massifs.Checkpoint, []byte, error) {
-
 	data, err := s.read(storagePath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read massif start from %s: %w", storagePath, err)

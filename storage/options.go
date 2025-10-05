@@ -22,6 +22,9 @@ var DefaultLogID = []byte{
 
 type FSOptions struct {
 	RootDir         string
+	CreateRootDir   bool
+	MassifFile      string
+	CheckpointFile  string
 	SealExtension   string // e.g. ".sth"
 	MassifExtension string // e.g. ".log"
 	ReadOpener      Opener
@@ -47,8 +50,31 @@ func WithRootDir(dir string) massifs.Option {
 	}
 }
 
-func (opts *Options) FillDefaults() error {
+func WithCreateRootDir() massifs.Option {
+	return func(a any) {
+		if o, ok := a.(*Options); ok {
+			o.CreateRootDir = true
+		}
+	}
+}
 
+func WithMassifFile(fileName string) massifs.Option {
+	return func(a any) {
+		if o, ok := a.(*Options); ok {
+			o.MassifFile = fileName
+		}
+	}
+}
+
+func WithCheckpointFile(fileName string) massifs.Option {
+	return func(a any) {
+		if o, ok := a.(*Options); ok {
+			o.CheckpointFile = fileName
+		}
+	}
+}
+
+func (opts *Options) FillDefaults() error {
 	var err error
 
 	if opts.MassifHeight == 0 {
@@ -95,7 +121,6 @@ func (opts *Options) FillDefaults() error {
 }
 
 func NewOptionsWithDefaults(parent *Options) (*Options, error) {
-
 	opts := &Options{}
 	if parent != nil {
 		*opts = *parent

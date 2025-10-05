@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
@@ -18,7 +19,6 @@ type CachingStore struct {
 }
 
 func (s *CachingStore) Init(ctx context.Context, parent *Options, vopts ...massifs.Option) error {
-
 	var err error
 	s.Opts = parent.Clone()
 	for _, opt := range vopts {
@@ -34,6 +34,12 @@ func (s *CachingStore) Init(ctx context.Context, parent *Options, vopts ...massi
 	err = s.checkOptions()
 	if err != nil {
 		return err
+	}
+
+	if s.Opts.CreateRootDir && s.Opts.RootDir != "" {
+		if err := os.MkdirAll(s.Opts.RootDir, s.Opts.DirCreateMode); err != nil {
+			return fmt.Errorf("failed to create root dir %s: %w", s.Opts.RootDir, err)
+		}
 	}
 
 	if s.Opts.LogID != nil {
@@ -72,76 +78,29 @@ func (s *CachingStore) checkOptions() error {
 		return fmt.Errorf("a ReadOpener must be provided")
 	}
 
+	if s.Opts.RootDir != "" {
+		if !s.Opts.CreateRootDir {
+			if stat, err := os.Stat(s.Opts.RootDir); err != nil || !stat.IsDir() {
+				return fmt.Errorf("root dir %s is not a directory or cannot be accessed: %w", s.Opts.RootDir, err)
+			}
+		}
+	}
+	if s.Opts.MassifFile != "" {
+		if stat, err := os.Stat(s.Opts.MassifFile); err != nil || stat.IsDir() {
+			return fmt.Errorf("massif file %s is not a file or cannot be accessed: %w", s.Opts.MassifFile, err)
+		}
+	}
+	if s.Opts.CheckpointFile != "" {
+		if stat, err := os.Stat(s.Opts.CheckpointFile); err != nil || stat.IsDir() {
+			return fmt.Errorf("checkpoint file %s is not a file or cannot be accessed: %w", s.Opts.CheckpointFile, err)
+		}
+	}
+
 	// if c.Opts.Opener == nil {
 	// 	return fmt.Errorf("Opener not set in options")
 	// }
 
 	return nil
-}
-
-// start returns the cached start record if it is present in the cache.
-// a false return indicates it is not present.
-func (s *CachingStore) start(massifIndex uint32) (*massifs.MassifStart, bool, error) {
-
-	var err error
-	var start *massifs.MassifStart
-	var path string
-	var ok bool
-	var data []byte
-	path, ok, err = s.dataPath(massifIndex)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
-
-	if start, ok = s.Selected.Starts[path]; ok {
-		return start, true, nil
-	}
-
-	// Put can invalidate the cached start, and we lazily re-populate it
-	if data, ok = s.Selected.MassifData[path]; !ok {
-		return nil, false, nil
-	}
-	start, err = decodeStart(data)
-	if err != nil {
-		return nil, false, err
-	}
-
-	s.Selected.Starts[path] = start
-
-	return start, true, nil
-}
-
-func (s *CachingStore) checkpoint(massifIndex uint32) (*massifs.Checkpoint, bool, error) {
-
-	var err error
-	var checkpt *massifs.Checkpoint
-	var path string
-	var ok bool
-	var data []byte
-	path, ok, err = s.checkpointPath(massifIndex)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
-
-	if checkpt, ok = s.Selected.Checkpoints[path]; ok {
-		return checkpt, true, nil
-	}
-	data, ok = s.Selected.CheckpointData[path]
-	if !ok {
-		return nil, false, nil
-	}
-
-	checkpt, err = decodeCheckpoint(*s.Opts.StorageOptions.CBORCodec, data)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to decode checkpoint from cached data: %w", err)
-	}
-	return checkpt, true, nil
 }
 
 func (s *CachingStore) paths(massifIndex uint32) (*MassifStoragePaths, bool, error) {
@@ -157,7 +116,6 @@ func (s *CachingStore) paths(massifIndex uint32) (*MassifStoragePaths, bool, err
 }
 
 func (s *CachingStore) dataPath(massifIndex uint32) (string, bool, error) {
-
 	paths, ok, err := s.paths(massifIndex)
 	if err != nil {
 		return "", false, err
@@ -173,7 +131,6 @@ func (s *CachingStore) dataPath(massifIndex uint32) (string, bool, error) {
 }
 
 func (s *CachingStore) checkpointPath(massifIndex uint32) (string, bool, error) {
-
 	paths, ok, err := s.paths(massifIndex)
 	if err != nil {
 		return "", false, err
