@@ -1,4 +1,4 @@
-module github.com/robinbryce/go-merklelog-fs
+module github.com/forestrie/go-merklelog-fs
 
 go 1.24.0
 
@@ -6,18 +6,18 @@ toolchain go1.24.4
 
 replace (
 	github.com/datatrails/go-datatrails-common => ../go-datatrails-common
+	github.com/forestrie/go-merklelog-fs => ../go-merklelog-fs
 	github.com/forestrie/go-merklelog-datatrails => ../go-merklelog-datatrails
+	github.com/forestrie/go-merklelog-provider-testing => ../go-merklelog-provider-testing
 	github.com/forestrie/go-merklelog/massifs => ../go-merklelog/massifs
 	github.com/forestrie/go-merklelog/mmr => ../go-merklelog/mmr
-	github.com/robinbryce/go-merklelog-azure => ../go-merklelog-azure
-	github.com/robinbryce/go-merklelog-provider-testing => ../go-merklelog-provider-testing
 )
 
 require (
 	github.com/datatrails/go-datatrails-common v0.30.0
-	github.com/forestrie/go-merklelog/massifs v0.0.0
+	github.com/forestrie/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
+	github.com/forestrie/go-merklelog/massifs v0.0.2
 	github.com/google/uuid v1.6.0
-	github.com/robinbryce/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 )
 

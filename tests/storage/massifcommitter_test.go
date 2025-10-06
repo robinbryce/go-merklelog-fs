@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	fsstorage "github.com/robinbryce/go-merklelog-fs/storage"
-	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
-	"github.com/robinbryce/go-merklelog-provider-testing/providers"
+	fsstorage "github.com/forestrie/go-merklelog-fs/storage"
+	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
+	"github.com/forestrie/go-merklelog-provider-testing/providers"
 	"github.com/stretchr/testify/require"
 )
 

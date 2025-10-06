@@ -6,7 +6,7 @@ import (
 	"github.com/forestrie/go-merklelog/massifs"
 	"github.com/forestrie/go-merklelog/massifs/storage"
 
-	// "github.com/robinbryce/go-merklelog-fs/storage"
+	// "github.com/forestrie/go-merklelog-fs/storage"
 	commoncbor "github.com/forestrie/go-merklelog/massifs/cbor"
 )
 

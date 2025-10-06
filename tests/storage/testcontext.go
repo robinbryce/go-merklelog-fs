@@ -7,8 +7,8 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/forestrie/go-merklelog/massifs"
-	fsstorage "github.com/robinbryce/go-merklelog-fs/storage"
-	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
+	fsstorage "github.com/forestrie/go-merklelog-fs/storage"
+	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
 )
 
 type TestContext struct {
